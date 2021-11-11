@@ -5,6 +5,8 @@ import com.akto.utils.CustomHttpServletResponseWrapper;
 import com.akto.utils.Kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.commons.io.IOUtils;
+
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -13,9 +15,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class LoggingFilter implements Filter {
+    private String brokerIP;
+    private String topic;
+    private Kafka kafka;
 
     @Override
-    public void init(FilterConfig filterConfig){ }
+    public void init(FilterConfig filterConfig){
+        brokerIP = filterConfig.getInitParameter("brokerIP");
+        topic = filterConfig.getInitParameter("topic");
+        kafka = new Kafka(brokerIP);
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -33,10 +42,10 @@ public class LoggingFilter implements Filter {
 
             logRequest(aa, finalMap);
             logResponse(bb, finalMap);
-
+            
             final String json = mapper.writeValueAsString(finalMap);
-            // TODO:
-            new Kafka().send(json);
+            // todo:
+            kafka.send(json, topic);
         }
 
     }
@@ -54,8 +63,8 @@ public class LoggingFilter implements Filter {
         }
         finalMap.put("requestHeaders",headers);
         ServletInputStream inputStream = request.getInputStream();
-        Object obj = mapper.readValue(inputStream,Object.class);
-        finalMap.put("requestPayload", obj);
+        String req = IOUtils.toString(inputStream, "UTF-8");
+        finalMap.put("requestPayload", req);
     }
 
     private void logResponse(final CustomHttpServletResponseWrapper response, Map<String, Object> finalMap) throws IOException {
@@ -74,8 +83,7 @@ public class LoggingFilter implements Filter {
         if (contentType == null || !contentType.split(";")[0].equals("application/json")) {
             res = "{}";
         }
-        Object obj = mapper.readValue(res,Object.class);
-        finalMap.put("responsePayload", obj);
+        finalMap.put("responsePayload",res);
 
     }
 
